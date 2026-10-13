@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snack Vote: Three Ways to Count</title>
+<style>
+:root {
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  --bg: #faf8f4; --card: #ffffff; --ink: #1f2430; --muted: #6a7080; --line: #e4dfd5;
+  --accent: #2f6fed; --accent-ink: #ffffff; --good: #1f9d6b; --bar: #9db9f5; --bar-win: #2f6fed; --bar-out: #d9dbe3;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14161b; --card: #1d2027; --ink: #eceef3; --muted: #98a0b3; --line: #2c303a;
+    --accent: #6f9bff; --accent-ink: #0d1220; --good: #43c493; --bar: #3a4f86; --bar-win: #6f9bff; --bar-out: #2f333d;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #14161b; --card: #1d2027; --ink: #eceef3; --muted: #98a0b3; --line: #2c303a;
+  --accent: #6f9bff; --accent-ink: #0d1220; --good: #43c493; --bar: #3a4f86; --bar-win: #6f9bff; --bar-out: #2f333d;
+}
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+* { box-sizing: border-box; }
+html, body, button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 20px 16px 48px; }
+h1 { font-size: 1.6rem; margin: 0 0 4px; }
+h2 { font-size: 1.15rem; margin: 0 0 4px; }
+.sub { color: var(--muted); margin: 0 0 16px; }
+.tabs { display: flex; gap: 8px; margin: 16px 0; }
+.tab { flex: 1; padding: 10px; border: 1px solid var(--line); background: var(--card); color: var(--ink); border-radius: 10px; font: inherit; font-weight: 600; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+.how { color: var(--muted); font-size: .92rem; margin: 0 0 12px; }
+.how a { color: var(--accent); }
+.opt { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.opt[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.opt .emoji { font-size: 1.3rem; }
+.opt .name { flex: 1; }
+.badge { min-width: 28px; height: 28px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: .9rem; }
+.score-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.score-row .label { flex: 1 1 140px; }
+.pills { display: flex; gap: 6px; }
+.pill { width: 38px; height: 38px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.pill[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
+button.primary { width: 100%; padding: 14px; border: 0; border-radius: 12px; background: var(--accent); color: var(--accent-ink); font: inherit; font-weight: 700; font-size: 1.05rem; cursor: pointer; }
+button.primary:disabled { opacity: .5; cursor: default; }
+button.link { background: none; border: 0; color: var(--muted); text-decoration: underline; cursor: pointer; font: inherit; padding: 4px 0; }
+.msg { margin: 10px 0 0; color: var(--muted); font-size: .92rem; }
+.msg.ok { color: var(--good); }
+.msg.err { color: #d1435b; }
+.bar-row { display: grid; grid-template-columns: 120px 1fr 64px; gap: 8px; align-items: center; margin: 6px 0; font-size: .95rem; }
+.bar-track { background: var(--line); border-radius: 6px; height: 20px; overflow: hidden; }
+.bar { height: 100%; background: var(--bar); transition: width .4s ease; }
+.bar.win { background: var(--bar-win); }
+.bar.out { background: var(--bar-out); }
+.num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+.out-name { text-decoration: line-through; color: var(--muted); }
+.round { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 10px; }
+.round h3 { margin: 0 0 4px; font-size: .95rem; color: var(--muted); }
+.winner { display: inline-block; margin: 4px 0 10px; padding: 4px 10px; border-radius: 999px; background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); font-weight: 700; }
+.insight { border-left: 4px solid var(--accent); padding: 8px 12px; background: var(--card); border-radius: 0 10px 10px 0; margin-bottom: 16px; }
+.count { color: var(--muted); font-size: .9rem; }
+.hidden { display: none; }
+.tab:disabled { opacity: .65; cursor: default; }
+.topbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.reset-btn { flex-shrink: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); font: inherit; font-size: .85rem; cursor: pointer; }
+.overlay { position: fixed; inset: 0; z-index: 50; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; padding: calc(16px + env(safe-area-inset-top, 0px)) 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+.overlay.hidden { display: none; }
+.dialog { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 14px; padding: 20px; width: 100%; max-width: 420px; }
+.dialog p { margin: 0 0 12px; color: var(--muted); }
+.dialog label { display: block; font-weight: 600; margin-bottom: 6px; }
+.dialog input { width: 100%; height: 44px; padding: 0 12px; font: inherit; font-size: 1rem; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--ink); }
+.dialog-actions { display: flex; justify-content: flex-end; align-items: center; gap: 16px; margin-top: 16px; }
+button.danger { padding: 10px 14px; border: 0; border-radius: 10px; background: #d1435b; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+button.danger:disabled { opacity: .5; cursor: default; }
+.budget { font-weight: 700; margin: 0 0 12px; padding: 6px 12px; border-radius: 999px; display: inline-block; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.budget.done { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+.stepper { display: flex; align-items: center; gap: 10px; }
+.stepper button { width: 40px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; font-size: 1.3rem; cursor: pointer; }
+.stepper button:disabled { opacity: .3; cursor: default; }
+.stepper input { width: 56px; height: 40px; text-align: center; font: inherit; font-weight: 700; font-size: 1.15rem; font-variant-numeric: tabular-nums; border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--ink); padding: 0; }
+.opt .check { font-weight: 700; color: var(--accent); }
+.stepper input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.stepper .pts { min-width: 28px; text-align: center; font-weight: 700; font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.rank-list { display: flex; flex-direction: column; gap: 8px; }
+.rank-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); position: relative; user-select: none; -webkit-user-select: none; }
+.rank-item.dragging { z-index: 5; border-color: var(--accent); box-shadow: 0 8px 24px rgba(0,0,0,.28); }
+.rank-item .emoji { font-size: 1.3rem; }
+.rank-item .name { flex: 1; }
+.handle { touch-action: none; cursor: grab; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: var(--muted); border-radius: 8px; flex-shrink: 0; }
+.rank-item.dragging .handle { cursor: grabbing; }
+.nudge { display: flex; flex-direction: column; gap: 2px; }
+.nudge button { width: 30px; height: 20px; border: 1px solid var(--line); background: transparent; color: var(--muted); border-radius: 4px; cursor: pointer; font-size: .65rem; line-height: 1; padding: 0; }
+.nudge button:disabled { opacity: .3; cursor: default; }
+.qr-panel { text-align: center; }
+.qr-panel svg { width: min(320px, 80vw); height: auto; border-radius: 8px; }
+.qr-panel .url { word-break: break-all; font-size: .85rem; color: var(--muted); margin: 8px 0 0; }
+@media (max-width: 480px) { .bar-row { grid-template-columns: 90px 1fr 54px; } }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <h1>🍎 Snack Vote</h1>
+    <button class="reset-btn hidden" id="reset">Reset all votes</button>
+  </div>
+  <p class="sub" id="question"></p>
+  <p class="count" id="status">Connecting…</p>
+  <button class="link" id="qr-toggle">Show QR code to join</button>
+  <div class="card qr-panel hidden" id="qr-panel">
+    <h2>Scan to vote</h2>
+    <div id="qr-img"></div>
+    <p class="url" id="qr-url"></p>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-ballot" aria-selected="true">Vote</button>
+    <button class="tab" role="tab" id="tab-results" aria-selected="false">Live results</button>
+  </div>
+
+  <section id="ballot">
+    <div class="card">
+      <h2>1 · Pick one (FPTP)</h2>
+      <p class="how">First Past The Post: choose your single favorite. Whoever gets the most votes wins, even without a majority. <a href="https://en.wikipedia.org/wiki/First-past-the-post_voting" target="_blank" rel="noopener noreferrer">Learn more</a>.</p>
+      <div id="fptp"></div>
+    </div>
+
+    <div class="card">
+      <h2>2 · Rank your choices (Ranked Choice)</h2>
+      <p class="how">Drag the snacks by the ⠿ handle (or use the arrows) so your favorite is at the top and your least favorite is at the bottom. <a href="https://www.britannica.com/procon/ranked-choice-voting-debate" target="_blank" rel="noopener noreferrer">Learn more</a>.</p>
+      <div id="rcv"></div>
+      <button class="link" id="rcv-keep">The order shown is already my ranking</button>
+    </div>
+
+    <div class="card">
+      <h2>3 · Allocate your 15 points (Score Voting)</h2>
+      <p class="how">You have 15 points to split however you like: put them all on one favorite, or spread them around. Tap + and − or type a number. The snack with the most points overall wins. <a href="https://en.wikipedia.org/wiki/Score_voting" target="_blank" rel="noopener noreferrer">Learn more</a>.</p>
+      <div class="budget" id="budget"></div>
+      <div id="scored"></div>
+    </div>
+
+    <div class="card">
+      <h2>4 · Pick every snack you approve of (Approval Voting)</h2>
+      <p class="how">Tap as many snacks as you like, or just one. Each tap means "Yes, I'd be happy with this." The snack approved by the most students wins. <a href="https://electionbuddy.com/blog/2022/02/16/significant-approval-voting-pros-and-cons/" target="_blank" rel="noopener noreferrer">Learn more</a>.</p>
+      <div id="approval"></div>
+    </div>
+
+    <button class="primary" id="submit" disabled>Submit my votes</button>
+    <p class="msg" id="submit-msg"></p>
+  </section>
+
+  <section id="results" class="hidden">
+    <div id="insight"></div>
+    <div class="card"><h2>First Past The Post</h2><p class="how">Most first-choice votes wins.</p><div id="res-fptp"></div></div>
+    <div class="card"><h2>Ranked Choice (instant runoff)</h2><p class="how">If nobody has over 50%, the last-place snack is eliminated and its voters' ballots move to their next choice.</p><div id="res-rcv"></div></div>
+    <div class="card"><h2>Score Voting</h2><p class="how">Every student had 15 points to spend. Most total points wins.</p><div id="res-scored"></div></div>
+    <div class="card"><h2>Approval Voting</h2><p class="how">Each student approved as many snacks as they liked. The snack approved by the most students wins.</p><div id="res-approval"></div></div>
+    
+  </section>
+</main>
+
+<div class="overlay hidden" id="reset-overlay" role="dialog" aria-modal="true" aria-labelledby="reset-title">
+  <div class="dialog">
+    <h2 id="reset-title">Reset all votes?</h2>
+    <p>This permanently deletes every vote cast so far and lets everyone vote again. It can't be undone.</p>
+    <p class="msg" id="reset-msg"></p>
+    <div class="dialog-actions">
+      <button class="link" id="reset-cancel">Cancel</button>
+      <button class="danger" id="reset-confirm">Yes, reset all votes</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script type="module">
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm";
+
+// ================= PASTE YOUR SUPABASE SETTINGS HERE (see README-supabase.md) =================
+const SUPABASE_URL = "PASTE_YOUR_PROJECT_URL";
+const SUPABASE_KEY = "PASTE_YOUR_ANON_PUBLIC_KEY";
+// =============================================================================================
+
+// To run a brand-new vote (new question, everyone can vote again), change ROUND to anything new, e.g. "round2".
+const ROUND = "round1";
+const PAGE_URL = location.href.split("#")[0].split("?")[0];
+
+// ---- Edit these to change the question or the snack list ----
+const QUESTION = "Which snack should we provide at the start of each school day?";
+const OPTIONS = [
+  { id: "fruit",   name: "Fresh fruit",   emoji: "🍎" },
+  { id: "granola", name: "Granola bars",  emoji: "🥣" },
+  { id: "pretzel", name: "Pretzels",      emoji: "🥨" },
+  { id: "cookie",  name: "Cookies",       emoji: "🍪" },
+  { id: "popcorn", name: "Popcorn",       emoji: "🍿" }
+];
+// -------------------------------------------------------------
+
+const $ = id => document.getElementById(id);
+const byId = Object.fromEntries(OPTIONS.map(o => [o.id, o]));
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const mine = { fptp: null, rcvOrder: shuffle(OPTIONS.map(o => o.id)), rcvTouched: false, scores: {}, approvals: [] };
+let allVotes = [];
+let db = null, myId = null, canWrite = true;
+
+$("question").textContent = QUESTION;
+
+// ---------- tabs ----------
+function showTab(name) {
+  const isBallot = name === "ballot";
+  $("reset").classList.toggle("hidden", isBallot);
+  $("ballot").classList.toggle("hidden", !isBallot);
+  $("results").classList.toggle("hidden", isBallot);
+  $("tab-ballot").setAttribute("aria-selected", String(isBallot));
+  $("tab-results").setAttribute("aria-selected", String(!isBallot));
+}
+$("tab-ballot").onclick = () => showTab("ballot");
+$("tab-results").onclick = () => showTab("results");
+
+// ---------- ballot UI ----------
+function renderBallot() {
+  // FPTP
+  const f = $("fptp"); f.innerHTML = "";
+  OPTIONS.forEach(o => {
+    const b = document.createElement("button");
+    b.className = "opt"; b.setAttribute("aria-pressed", String(mine.fptp === o.id));
+    b.innerHTML = '<span class="emoji"></span><span class="name"></span>';
+    b.children[0].textContent = o.emoji; b.children[1].textContent = o.name;
+    b.onclick = () => { mine.fptp = o.id; renderBallot(); };
+    f.appendChild(b);
+  });
+  // RCV (drag to reorder)
+  const r = $("rcv"); r.innerHTML = ""; r.className = "rank-list";
+  mine.rcvOrder.forEach((id, i) => {
+    const o = byId[id];
+    const item = document.createElement("div");
+    item.className = "rank-item"; item.dataset.id = id;
+    const badge = document.createElement("span"); badge.className = "badge"; badge.textContent = i + 1;
+    const emoji = document.createElement("span"); emoji.className = "emoji"; emoji.textContent = o.emoji;
+    const name = document.createElement("span"); name.className = "name"; name.textContent = o.name;
+    const nudge = document.createElement("div"); nudge.className = "nudge";
+    const up = document.createElement("button"); up.textContent = "▲"; up.setAttribute("aria-label", "Move " + o.name + " up"); up.disabled = i === 0;
+    const down = document.createElement("button"); down.textContent = "▼"; down.setAttribute("aria-label", "Move " + o.name + " down"); down.disabled = i === mine.rcvOrder.length - 1;
+    up.onclick = () => nudgeRank(i, -1); down.onclick = () => nudgeRank(i, 1);
+    nudge.append(up, down);
+    const handle = document.createElement("div"); handle.className = "handle"; handle.textContent = "⠿"; handle.setAttribute("aria-label", "Drag to reorder " + o.name);
+    handle.addEventListener("pointerdown", e => startDrag(e, item, handle));
+    item.append(badge, emoji, name, nudge, handle);
+    r.appendChild(item);
+  });
+  $("rcv-keep").classList.toggle("hidden", mine.rcvTouched);
+  // Scored (15-point budget): tap + / − or type a number
+  const s = $("scored"); s.innerHTML = "";
+  OPTIONS.forEach(o => {
+    const row = document.createElement("div"); row.className = "score-row";
+    const label = document.createElement("div"); label.className = "label"; label.textContent = o.emoji + " " + o.name;
+    const step = document.createElement("div"); step.className = "stepper"; step.dataset.id = o.id;
+    const minus = document.createElement("button"); minus.className = "minus"; minus.textContent = "−"; minus.setAttribute("aria-label", "Remove a point from " + o.name);
+    const input = document.createElement("input");
+    input.type = "text"; input.inputMode = "numeric"; input.pattern = "[0-9]*"; input.maxLength = 2; input.autocomplete = "off";
+    input.value = mine.scores[o.id] || 0;
+    input.setAttribute("aria-label", "Points for " + o.name);
+    const plus = document.createElement("button"); plus.className = "plus"; plus.textContent = "+"; plus.setAttribute("aria-label", "Add a point to " + o.name);
+    minus.onclick = () => setPoints(o.id, (mine.scores[o.id] || 0) - 1);
+    plus.onclick = () => setPoints(o.id, (mine.scores[o.id] || 0) + 1);
+    input.addEventListener("focus", () => input.select());
+    input.addEventListener("keydown", e => { if (e.key === "Enter") input.blur(); });
+    input.addEventListener("input", () => {
+      input.value = input.value.replace(/\D/g, "");
+      let v = parseInt(input.value, 10) || 0;
+      const room = BUDGET - (pointsSpent() - (mine.scores[o.id] || 0));
+      if (v > room) { v = room; input.value = String(v); }
+      if (v <= 0) delete mine.scores[o.id]; else mine.scores[o.id] = v;
+      updateScoredStatus();
+    });
+    input.addEventListener("change", () => { input.value = mine.scores[o.id] || 0; updateScoredStatus(); });
+    step.append(minus, input, plus);
+    row.append(label, step); s.appendChild(row);
+  });
+  updateScoredStatus();
+}
+function hasAnyVote() {
+  return mine.fptp || mine.rcvTouched || Object.keys(mine.scores).length > 0 || mine.approvals.length > 0;
+}
+const BUDGET = 15;
+function pointsSpent() { return Object.values(mine.scores).reduce((a, b) => a + b, 0); }
+function updateScoredStatus() {
+  const spent = pointsSpent(), left = BUDGET - spent;
+  $("budget").textContent = left === 0 ? "All " + BUDGET + " points spent ✓" : (spent === 0 ? BUDGET + " points to spend" : left + " left — spend them all to submit your points");
+  $("budget").className = "budget" + (left === 0 ? " done" : "");
+  document.querySelectorAll("#scored .stepper").forEach(st => {
+    st.querySelector(".minus").disabled = !(mine.scores[st.dataset.id] > 0);
+    st.querySelector(".plus").disabled = spent >= BUDGET;
+  });
+  $("submit").disabled = !db || !canWrite || hasVoted || !hasAnyVote() || (spent > 0 && spent < BUDGET);
+}
+function setPoints(id, v) {
+  if (v <= 0) delete mine.scores[id];
+  else if (v - (mine.scores[id] || 0) <= BUDGET - pointsSpent()) mine.scores[id] = v;
+  renderBallot();
+}
+
+$("rcv-keep").onclick = () => { mine.rcvTouched = true; renderBallot(); };
+
+function nudgeRank(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= mine.rcvOrder.length) return;
+  [mine.rcvOrder[i], mine.rcvOrder[j]] = [mine.rcvOrder[j], mine.rcvOrder[i]];
+  mine.rcvTouched = true; renderBallot();
+}
+
+function startDrag(e, item, handle) {
+  e.preventDefault();
+  const list = item.parentElement;
+  handle.setPointerCapture(e.pointerId);
+  const grab = e.clientY - item.getBoundingClientRect().top;
+  item.classList.add("dragging");
+  const move = ev => {
+    item.style.transform = "";
+    const desired = ev.clientY - grab;
+    let guard = 0;
+    while (guard++ < 10) {
+      const h = item.getBoundingClientRect().height;
+      const center = desired + h / 2;
+      const prev = item.previousElementSibling, next = item.nextElementSibling;
+      if (prev) { const pr = prev.getBoundingClientRect(); if (center < pr.top + pr.height / 2) { list.insertBefore(item, prev); continue; } }
+      if (next) { const nr = next.getBoundingClientRect(); if (center > nr.top + nr.height / 2) { list.insertBefore(next, item); continue; } }
+      break;
+    }
+    const natural = item.getBoundingClientRect().top;
+    item.style.transform = "translateY(" + (desired - natural) + "px)";
+    [...list.children].forEach((c, i) => { c.querySelector(".badge").textContent = i + 1; });
+  };
+  const end = () => {
+    handle.removeEventListener("pointermove", move);
+    handle.removeEventListener("pointerup", end);
+    handle.removeEventListener("pointercancel", end);
+    item.style.transform = ""; item.classList.remove("dragging");
+    const order = [...list.children].map(c => c.dataset.id);
+    if (order.join() !== mine.rcvOrder.join()) { mine.rcvOrder = order; mine.rcvTouched = true; }
+    renderBallot();
+  };
+  handle.addEventListener("pointermove", move);
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
+}
+
+$("submit").onclick = async () => {
+  const msg = $("submit-msg"); msg.className = "msg"; msg.textContent = "Saving…";
+  $("submit").disabled = true;
+  try {
+    const { error } = await db.from("votes").insert({
+      round: ROUND,
+      voter_id: myId,
+      fptp: mine.fptp || null,
+      rcv: mine.rcvTouched ? mine.rcvOrder.slice() : [],
+      scores: { ...mine.scores },
+      approvals: mine.approvals.slice()
+    });
+    if (error) throw error;
+    local.voted = true; local.votedAt = Date.now(); saveLocal(local); hasVoted = true;
+    lockBallot();
+  } catch (e) {
+    msg.className = "msg err";
+    msg.textContent = "Couldn't save your vote. If you've already voted from this device, you can't vote twice.";
+  }
+  renderBallot();
+};
+
+// ---------- approval ballot ----------
+function renderApproval() {
+  const a = $("approval"); a.innerHTML = "";
+  OPTIONS.forEach(o => {
+    const on = mine.approvals.includes(o.id);
+    const b = document.createElement("button");
+    b.className = "opt"; b.setAttribute("aria-pressed", String(on));
+    b.innerHTML = '<span class="emoji"></span><span class="name"></span><span class="check"></span>';
+    b.children[0].textContent = o.emoji; b.children[1].textContent = o.name;
+    b.children[2].textContent = on ? "✓ Approve" : "";
+    b.onclick = () => {
+      if (on) mine.approvals = mine.approvals.filter(id => id !== o.id); else mine.approvals.push(o.id);
+      renderApproval(); updateScoredStatus();
+    };
+    a.appendChild(b);
+  });
+}
+
+// ---------- tallies ----------
+function tallyApproval(votes) {
+  const valid = new Set(OPTIONS.map(o => o.id));
+  const counts = Object.fromEntries(OPTIONS.map(o => [o.id, 0]));
+  let voters = 0;
+  votes.forEach(v => {
+    const ids = [...new Set(Array.isArray(v.approvals) ? v.approvals.filter(id => valid.has(id)) : [])];
+    if (ids.length) { voters++; ids.forEach(id => counts[id]++); }
+  });
+  return { counts, voters };
+}
+function tallyFptp(votes) {
+  const t = Object.fromEntries(OPTIONS.map(o => [o.id, 0]));
+  let n = 0;
+  votes.forEach(v => { if (v.fptp && t[v.fptp] !== undefined) { t[v.fptp]++; n++; } });
+  return { counts: t, total: n };
+}
+function tallyScored(votes) {
+  const sum = Object.fromEntries(OPTIONS.map(o => [o.id, 0]));
+  const cnt = Object.fromEntries(OPTIONS.map(o => [o.id, 0]));
+  let voters = 0;
+  votes.forEach(v => {
+    const sc = v.scores || {}; let any = false;
+    const tot = OPTIONS.reduce((a, o) => a + (typeof sc[o.id] === "number" && sc[o.id] > 0 ? sc[o.id] : 0), 0);
+    if (tot > BUDGET) return;
+    OPTIONS.forEach(o => { if (typeof sc[o.id] === "number" && sc[o.id] > 0) { sum[o.id] += sc[o.id]; cnt[o.id]++; any = true; } });
+    if (any) voters++;
+  });
+  return { sum, cnt, voters };
+}
+function tallyRcv(votes) {
+  const ballots = votes.map(v => (v.rcv || []).filter(id => byId[id])).filter(b => b.length > 0);
+  const rounds = [];
+  let active = OPTIONS.map(o => o.id);
+  while (active.length > 0) {
+    const counts = Object.fromEntries(active.map(id => [id, 0]));
+    let live = 0;
+    ballots.forEach(b => {
+      const pick = b.find(id => active.includes(id));
+      if (pick) { counts[pick]++; live++; }
+    });
+    const eliminatedBefore = OPTIONS.map(o => o.id).filter(id => !active.includes(id));
+    const round = { counts, live, eliminatedBefore, winner: null, eliminated: null, tie: false };
+    rounds.push(round);
+    if (live === 0) break;
+    const leader = active.reduce((a, b) => counts[b] > counts[a] ? b : a, active[0]);
+    if (counts[leader] * 2 > live || active.length === 1) { round.winner = leader; break; }
+    const min = Math.min(...active.map(id => counts[id]));
+    const lowest = active.filter(id => counts[id] === min);
+    if (lowest.length === active.length) { round.tie = true; break; } // everyone tied
+    // eliminate the first of the lowest (ties are rare; noted in the UI)
+    round.eliminated = lowest[0];
+    round.tie = lowest.length > 1;
+    active = active.filter(id => id !== lowest[0]);
+  }
+  return { rounds, ballots: ballots.length };
+}
+
+// ---------- results UI ----------
+function barRow(label, value, max, display, cls, struck) {
+  const row = document.createElement("div"); row.className = "bar-row";
+  const l = document.createElement("div"); l.textContent = label; if (struck) l.className = "out-name";
+  const track = document.createElement("div"); track.className = "bar-track";
+  const bar = document.createElement("div"); bar.className = "bar " + (cls || "");
+  bar.style.width = (max > 0 ? Math.round((value / max) * 100) : 0) + "%";
+  track.appendChild(bar);
+  const n = document.createElement("div"); n.className = "num"; n.textContent = display;
+  row.append(l, track, n); return row;
+}
+const label = id => byId[id].emoji + " " + byId[id].name;
+
+function renderResults() {
+  const votes = allVotes;
+  $("status").textContent = votes.length === 0
+    ? "No votes yet. Be the first!"
+    : votes.length + (votes.length === 1 ? " student has voted" : " students have voted") + " · results update live";
+
+  // FPTP
+  const fp = tallyFptp(votes);
+  const fpMax = Math.max(0, ...Object.values(fp.counts));
+  const fpBox = $("res-fptp"); fpBox.innerHTML = "";
+  const fpWinners = fpMax > 0 ? OPTIONS.filter(o => fp.counts[o.id] === fpMax).map(o => o.id) : [];
+  [...OPTIONS].sort((a, b) => fp.counts[b.id] - fp.counts[a.id]).forEach(o => {
+    const pct = fp.total ? Math.round(fp.counts[o.id] / fp.total * 100) : 0;
+    fpBox.appendChild(barRow(label(o.id), fp.counts[o.id], fpMax, fp.counts[o.id] + " (" + pct + "%)", fpWinners.includes(o.id) ? "win" : ""));
+  });
+  if (fpWinners.length) { const w = document.createElement("div"); w.className = "winner"; w.textContent = (fpWinners.length > 1 ? "Tie: " : "Winner: ") + fpWinners.map(label).join(" & "); fpBox.prepend(w);
+    if (fp.total && fp.counts[fpWinners[0]] * 2 <= fp.total && fpWinners.length === 1) { const n = document.createElement("p"); n.className = "how"; n.textContent = "Notice: the winner has less than 50% of the votes."; fpBox.appendChild(n); } }
+
+  // RCV
+  const rc = tallyRcv(votes);
+  const rcBox = $("res-rcv"); rcBox.innerHTML = "";
+  let rcvWinner = null;
+  rc.rounds.forEach((rd, i) => {
+    if (rd.live === 0) return;
+    const div = document.createElement("div"); div.className = i ? "round" : "";
+    const h = document.createElement("h3");
+    h.textContent = "Round " + (i + 1) + " · " + rd.live + " active ballots" + (rd.winner ? "" : " · need " + (Math.floor(rd.live / 2) + 1) + " to win");
+    div.appendChild(h);
+    const max = Math.max(...Object.values(rd.counts));
+    OPTIONS.forEach(o => {
+      if (rd.eliminatedBefore.includes(o.id)) { div.appendChild(barRow(label(o.id), 0, 1, "out", "out", true)); return; }
+      const c = rd.counts[o.id];
+      const pct = rd.live ? Math.round(c / rd.live * 100) : 0;
+      div.appendChild(barRow(label(o.id), c, max, c + " (" + pct + "%)", rd.winner === o.id ? "win" : ""));
+    });
+    if (rd.eliminated) { const p = document.createElement("p"); p.className = "how"; p.textContent = "Eliminated: " + label(rd.eliminated) + (rd.tie ? " (tied for last; first on the list is eliminated here)" : "") + ". Its voters' ballots move to their next choice."; div.appendChild(p); }
+    if (rd.winner) rcvWinner = rd.winner;
+    if (rd.tie && !rd.eliminated) { const p = document.createElement("p"); p.className = "how"; p.textContent = "All remaining snacks are tied."; div.appendChild(p); }
+    rcBox.appendChild(div);
+  });
+  if (rcvWinner) { const w = document.createElement("div"); w.className = "winner"; w.textContent = "Winner: " + label(rcvWinner); rcBox.prepend(w); }
+  if (!rc.ballots) rcBox.textContent = "No ranked ballots yet.";
+
+  // Scored
+  const sc = tallyScored(votes);
+  const scMax = Math.max(0, ...Object.values(sc.sum));
+  const scBox = $("res-scored"); scBox.innerHTML = "";
+  const scWinners = scMax > 0 ? OPTIONS.filter(o => sc.sum[o.id] === scMax).map(o => o.id) : [];
+  [...OPTIONS].sort((a, b) => sc.sum[b.id] - sc.sum[a.id]).forEach(o => {
+    const totalPts = Object.values(sc.sum).reduce((a, b) => a + b, 0); const share = totalPts ? Math.round(sc.sum[o.id] / totalPts * 100) : 0;
+    scBox.appendChild(barRow(label(o.id), sc.sum[o.id], scMax, sc.sum[o.id] + " pts (" + share + "%)", scWinners.includes(o.id) ? "win" : ""));
+  });
+  if (scWinners.length) { const w = document.createElement("div"); w.className = "winner"; w.textContent = (scWinners.length > 1 ? "Tie: " : "Winner: ") + scWinners.map(label).join(" & "); scBox.prepend(w); }
+  if (!sc.voters) scBox.textContent = "No scores yet.";
+
+  // Approval
+  const ap = tallyApproval(votes);
+  const apMax = Math.max(0, ...Object.values(ap.counts));
+  const apBox = $("res-approval"); apBox.innerHTML = "";
+  const apWinners = apMax > 0 ? OPTIONS.filter(o => ap.counts[o.id] === apMax).map(o => o.id) : [];
+  [...OPTIONS].sort((a, b) => ap.counts[b.id] - ap.counts[a.id]).forEach(o => {
+    const pct = ap.voters ? Math.round(ap.counts[o.id] / ap.voters * 100) : 0;
+    apBox.appendChild(barRow(label(o.id), ap.counts[o.id], apMax, ap.counts[o.id] + " (" + pct + "%)", apWinners.includes(o.id) ? "win" : ""));
+  });
+  if (apWinners.length) { const w = document.createElement("div"); w.className = "winner"; w.textContent = (apWinners.length > 1 ? "Tie: " : "Winner: ") + apWinners.map(label).join(" & "); apBox.prepend(w); }
+  if (!ap.voters) apBox.textContent = "No approvals yet.";
+
+  // Insight
+  const ins = $("insight"); ins.innerHTML = "";
+  const winners = [fpWinners.length === 1 ? fpWinners[0] : null, rcvWinner, scWinners.length === 1 ? scWinners[0] : null, apWinners.length === 1 ? apWinners[0] : null];
+  if (winners.every(Boolean)) {
+    const d = document.createElement("div"); d.className = "insight";
+    const uniq = new Set(winners).size;
+    const words = ["", "one", "two", "three", "four"];
+    d.textContent = uniq === 1 ? "All four methods picked the same winner: " + label(winners[0]) + ". Do you think that always happens?"
+      : "Same voters, " + words[uniq] + " different winner" + (uniq > 1 ? "s" : "") + "! The way we count votes can change the outcome. Which result feels the fairest to you?";
+    ins.appendChild(d);
+  }
+}
+
+// ---------- one vote per browser ----------
+const LS_KEY = "snackvote:" + ROUND;
+function loadLocal() { try { return JSON.parse(localStorage.getItem(LS_KEY)) || {}; } catch (e) { return {}; } }
+function saveLocal(o) { try { localStorage.setItem(LS_KEY, JSON.stringify(o)); } catch (e) {} }
+const local = loadLocal();
+if (!local.id) {
+  local.id = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : (String(Math.random()).slice(2) + Date.now());
+  saveLocal(local);
+}
+let hasVoted = !!local.voted;
+
+function lockBallot() {
+  $("tab-ballot").disabled = true;
+  $("tab-ballot").textContent = "Voted ✓";
+  showTab("results");
+}
+
+function unlockBallot(goToBallot) {
+  hasVoted = false; delete local.voted; delete local.votedAt; saveLocal(local);
+  mine.fptp = null; mine.rcvOrder = shuffle(OPTIONS.map(o => o.id)); mine.rcvTouched = false; mine.scores = {}; mine.approvals = [];
+  $("tab-ballot").disabled = false; $("tab-ballot").textContent = "Vote";
+  $("submit-msg").textContent = "";
+  renderBallot(); renderApproval();
+  if (goToBallot) showTab("ballot");
+}
+
+// ---------- live data ----------
+async function loadVotes() {
+  const { data, error } = await db.from("votes").select("voter_id, fptp, rcv, scores, approvals").eq("round", ROUND);
+  if (error) { $("status").textContent = "Couldn't load live results. Check your Supabase setup (see README-supabase.md)."; return; }
+  allVotes = data.map(r => ({ fptp: r.fptp, rcv: r.rcv || [], scores: r.scores || {}, approvals: r.approvals || [] }));
+  if (hasVoted && !data.some(r => r.voter_id === myId) && Date.now() - (local.votedAt || 0) > 8000) {
+    unlockBallot(true); // votes were reset, so this browser may vote again
+  }
+  if (!hasVoted && data.some(r => r.voter_id === myId)) {
+    hasVoted = true; local.voted = true; saveLocal(local); lockBallot(); renderBallot();
+  }
+  renderResults();
+}
+
+async function start() {
+  renderBallot();
+  renderApproval();
+  if (SUPABASE_URL.includes("PASTE") || SUPABASE_KEY.includes("PASTE")) {
+    $("status").textContent = "Setup needed: add your Supabase settings to index.html (see README-supabase.md).";
+    return;
+  }
+  try {
+    db = createClient(SUPABASE_URL, SUPABASE_KEY);
+  } catch (e) {
+    $("status").textContent = "Couldn't connect. Check the Supabase settings in index.html.";
+    return;
+  }
+  myId = local.id;
+  if (hasVoted) lockBallot();
+  renderBallot();
+  await loadVotes();
+  setInterval(loadVotes, 3000); // refresh the results every 3 seconds
+}
+
+function openReset() {
+  $("reset-msg").textContent = ""; $("reset-msg").className = "msg";
+  $("reset-overlay").classList.remove("hidden");
+  setTimeout(() => $("reset-cancel").focus(), 0);
+}
+function closeReset() { $("reset-overlay").classList.add("hidden"); }
+$("reset").onclick = openReset;
+$("reset-cancel").onclick = closeReset;
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeReset(); });
+$("reset-confirm").onclick = async () => {
+  const msg = $("reset-msg");
+  if (!db) { msg.className = "msg err"; msg.textContent = "Voting isn't connected yet, so there's nothing to reset."; return; }
+  $("reset-confirm").disabled = true; msg.className = "msg"; msg.textContent = "Resetting…";
+  const { error } = await db.rpc("reset_votes", { p_round: ROUND });
+  $("reset-confirm").disabled = false;
+  if (error) { msg.className = "msg err"; msg.textContent = "Couldn't reset the votes. Did you run the latest setup.sql in Supabase?"; return; }
+  closeReset();
+  if (hasVoted) unlockBallot(false);
+  await loadVotes();
+};
+
+$("qr-toggle").onclick = () => {
+  const panel = $("qr-panel");
+  const show = panel.classList.contains("hidden");
+  if (show && !$("qr-img").firstChild) {
+    try {
+      const qr = qrcode(0, "M");
+      qr.addData(PAGE_URL); qr.make();
+      $("qr-img").innerHTML = qr.createSvgTag({ cellSize: 6, margin: 3, scalable: true });
+    } catch (e) { $("qr-img").textContent = "Couldn't draw the QR code."; }
+    $("qr-url").textContent = PAGE_URL;
+  }
+  panel.classList.toggle("hidden", !show);
+  $("qr-toggle").textContent = show ? "Hide QR code" : "Show QR code to join";
+};
+
+start();
+</script>
+</body>
+</html>
